@@ -88,9 +88,14 @@ export default function Login() {
         </form>
         <CardFooter className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
           <span className="text-ink-600">{t('login.no_account')}</span>
-          <Link to="/register" className="font-medium text-brand-600 hover:underline">
-            {t('login.register_link')}
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link to="/forgot-password" className="link-quiet">
+              {t('login.forgot_password')}
+            </Link>
+            <Link to="/register" className="font-medium text-brand-600 hover:underline">
+              {t('login.register_link')}
+            </Link>
+          </div>
         </CardFooter>
       </Card>
     </Container>

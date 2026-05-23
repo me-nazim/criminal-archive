@@ -1,6 +1,7 @@
 package attachments
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -22,19 +23,28 @@ import (
 	"github.com/me-nazim/criminal-archive/backend/internal/storage"
 )
 
+// StorageProvider hands out a live *storage.Client. Implemented by
+// storage.Manager. The function returns ErrUnconfigured when no driver
+// is yet configured by the admin.
+type StorageProvider interface {
+	Client(ctx context.Context) (*storage.Client, error)
+}
+
 // Handlers wires the attachment lifecycle.
 type Handlers struct {
 	repo    *Repository
 	cases   *cases.Repository
-	store   *storage.Client
+	storage StorageProvider
 	logger  *slog.Logger
 	hmacKey []byte // signs the "presign token" returned to the client
 	audit   *auditWriter
 }
 
-// NewHandlers constructs a Handlers.
-func NewHandlers(repo *Repository, casesRepo *cases.Repository, store *storage.Client, hmacKey []byte, logger *slog.Logger) *Handlers {
-	return &Handlers{repo: repo, cases: casesRepo, store: store, logger: logger, hmacKey: hmacKey}
+// NewHandlers constructs a Handlers. The storage argument is a provider
+// so the handler always uses fresh credentials when an admin rotates the
+// storage configuration without restarting the API.
+func NewHandlers(repo *Repository, casesRepo *cases.Repository, storage StorageProvider, hmacKey []byte, logger *slog.Logger) *Handlers {
+	return &Handlers{repo: repo, cases: casesRepo, storage: storage, logger: logger, hmacKey: hmacKey}
 }
 
 // MountAuthenticated mounts contributor+ routes (presign, finalize).
@@ -118,7 +128,12 @@ func (h *Handlers) presign(w http.ResponseWriter, r *http.Request) {
 	stored := fmt.Sprintf("%s_%s_%02d%s", c.CaseNumber, body.Kind, seq, strings.ToLower(ext))
 	key := fmt.Sprintf("cases/%s/%s/%s", c.CaseNumber, body.Kind, stored)
 
-	signed, err := h.store.PresignPut(r.Context(), storage.PresignedPutInput{
+	store, err := h.storage.Client(r.Context())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, httpx.BadRequest("Storage is not configured. Ask an administrator to set it up."))
+		return
+	}
+	signed, err := store.PresignPut(r.Context(), storage.PresignedPutInput{
 		Key: key, ContentType: body.MimeType, Expiry: 10 * time.Minute,
 	})
 	if err != nil {
@@ -170,7 +185,12 @@ func (h *Handlers) finalize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exists, sizeOnDisk, _, err := h.store.HeadObject(r.Context(), tk.Key)
+	store, err := h.storage.Client(r.Context())
+	if err != nil {
+		httpx.WriteError(w, r, h.logger, httpx.BadRequest("Storage is not configured."))
+		return
+	}
+	exists, sizeOnDisk, _, err := store.HeadObject(r.Context(), tk.Key)
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, err)
 		return
@@ -186,7 +206,7 @@ func (h *Handlers) finalize(w http.ResponseWriter, r *http.Request) {
 
 	var publicURL *string
 	if tk.Kind == "public" {
-		if u := h.store.PublicURL(tk.Key); u != "" {
+		if u := store.PublicURL(tk.Key); u != "" {
 			publicURL = &u
 		}
 	}
@@ -256,7 +276,13 @@ func (h *Handlers) downloadURL(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, mapNotFound(err))
 		return
 	}
-	signed, err := h.store.PresignGet(r.Context(), att.StorageKey, 5*time.Minute)
+	signed, err := func() (*storage.PresignedURL, error) {
+		store, err := h.storage.Client(r.Context())
+		if err != nil {
+			return nil, err
+		}
+		return store.PresignGet(r.Context(), att.StorageKey, 5*time.Minute)
+	}()
 	if err != nil {
 		httpx.WriteError(w, r, h.logger, err)
 		return
@@ -302,10 +328,12 @@ func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.logger, mapNotFound(err))
 		return
 	}
-	if err := h.store.DeleteObject(r.Context(), att.StorageKey); err != nil {
-		// Object deletion is best-effort: the row is gone, R2 cleanup may
-		// happen via lifecycle policies. We log and continue.
-		h.logger.Warn("storage: delete object failed", "key", att.StorageKey, "err", err)
+	if store, sErr := h.storage.Client(r.Context()); sErr == nil {
+		if err := store.DeleteObject(r.Context(), att.StorageKey); err != nil {
+			// Object deletion is best-effort: the row is gone, R2 cleanup may
+			// happen via lifecycle policies. We log and continue.
+			h.logger.Warn("storage: delete object failed", "key", att.StorageKey, "err", err)
+		}
 	}
 	actor := auth.MustIdentity(r.Context())
 	ip, ua := audit.FromRequest(r)

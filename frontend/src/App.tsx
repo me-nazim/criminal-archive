@@ -10,6 +10,8 @@ import Forbidden from './routes/Forbidden'
 import Login from './routes/Login'
 import Register from './routes/Register'
 import RegisterPending from './routes/RegisterPending'
+import ForgotPassword from './routes/ForgotPassword'
+import ResetPassword from './routes/ResetPassword'
 import Me from './routes/Me'
 
 import Cases from './routes/Cases'
@@ -32,6 +34,13 @@ import AdminPersons from './routes/admin/Persons'
 import AdminVerification from './routes/admin/Verification'
 import AdminAuditLog from './routes/admin/AuditLog'
 
+import SettingsLayout from './routes/admin/settings/SettingsLayout'
+import SettingsIndex from './routes/admin/settings/Index'
+import BrandingSettings from './routes/admin/settings/Branding'
+import EmailSettings from './routes/admin/settings/Email'
+import StorageSettings from './routes/admin/settings/Storage'
+import FeaturesSettings from './routes/admin/settings/Features'
+
 export default function App() {
   return (
     <Routes>
@@ -49,6 +58,8 @@ export default function App() {
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
         <Route path="register/pending" element={<RegisterPending />} />
+        <Route path="forgot-password" element={<ForgotPassword />} />
+        <Route path="reset-password" element={<ResetPassword />} />
 
         {/* Authenticated user */}
         <Route
@@ -101,6 +112,13 @@ export default function App() {
           <Route path="persons" element={<AdminPersons />} />
           <Route path="verification" element={<AdminVerification />} />
           <Route path="audit-log" element={<AdminAuditLog />} />
+          <Route path="settings" element={<SettingsLayout />}>
+            <Route index element={<SettingsIndex />} />
+            <Route path="branding" element={<BrandingSettings />} />
+            <Route path="email" element={<EmailSettings />} />
+            <Route path="storage" element={<StorageSettings />} />
+            <Route path="features" element={<FeaturesSettings />} />
+          </Route>
         </Route>
 
         {/* Misc */}

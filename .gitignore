@@ -34,3 +34,12 @@ docker-compose.override.yml
 /data/
 /uploads/
 /tmp/
+
+
+# Email templates workspace (react-email)
+emails/node_modules/
+emails/.next/
+emails/.react-email/
+emails/dist/
+emails/*.log
+emails/package-lock.json
