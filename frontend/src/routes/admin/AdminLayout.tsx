@@ -3,7 +3,16 @@
 
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { FileText, LayoutDashboard, ScrollText, ShieldAlert, ShieldCheck, Users, UserSquare } from 'lucide-react'
+import {
+  FileText,
+  LayoutDashboard,
+  ScrollText,
+  Settings,
+  ShieldAlert,
+  ShieldCheck,
+  Users,
+  UserSquare,
+} from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 export default function AdminLayout() {
@@ -50,6 +59,10 @@ export default function AdminLayout() {
         <NavLink to="/admin/audit-log" className={itemCls}>
           <ScrollText className="h-4 w-4" aria-hidden />
           {t('admin.nav_audit')}
+        </NavLink>
+        <NavLink to="/admin/settings" className={itemCls}>
+          <Settings className="h-4 w-4" aria-hidden />
+          {t('admin.nav_settings')}
         </NavLink>
       </aside>
       <main className="min-w-0">

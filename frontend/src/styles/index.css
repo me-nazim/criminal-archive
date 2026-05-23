@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  /* Brand-aware CSS custom props. The `useBranding` hook overrides
+     these at runtime when an admin updates the branding row. */
+  :root {
+    --brand-primary: #e8501f;
+    --brand-accent: #0f1320;
+  }
+
   html {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -11,6 +18,35 @@
     @apply bg-ink-50 text-ink-900 font-sans;
   }
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-brand-500;
+    @apply outline-2 outline-offset-2;
+    outline-color: var(--brand-primary);
+  }
+  ::selection {
+    background-color: rgba(232, 80, 31, 0.18);
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+  .card-soft {
+    @apply rounded-xl border border-ink-200 bg-white shadow-soft;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-soft transition;
+    background-color: var(--brand-primary);
+  }
+  .btn-primary:hover {
+    filter: brightness(0.95);
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-ink-300 bg-white px-4 py-2 text-sm font-semibold text-ink-800 transition hover:bg-ink-100;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-2.5 py-1 text-xs font-medium text-ink-700;
+  }
+  .link-quiet {
+    @apply text-ink-600 underline-offset-4 hover:text-ink-900 hover:underline;
   }
 }

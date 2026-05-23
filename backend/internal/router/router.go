@@ -6,6 +6,7 @@ package router
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -21,12 +22,15 @@ import (
 	"github.com/me-nazim/criminal-archive/backend/internal/cases"
 	"github.com/me-nazim/criminal-archive/backend/internal/config"
 	"github.com/me-nazim/criminal-archive/backend/internal/crimetypes"
+	"github.com/me-nazim/criminal-archive/backend/internal/email"
 	"github.com/me-nazim/criminal-archive/backend/internal/feeds"
 	"github.com/me-nazim/criminal-archive/backend/internal/locations"
 	"github.com/me-nazim/criminal-archive/backend/internal/metrics"
 	tipmw "github.com/me-nazim/criminal-archive/backend/internal/middleware"
+	"github.com/me-nazim/criminal-archive/backend/internal/notifications"
 	"github.com/me-nazim/criminal-archive/backend/internal/persons"
 	"github.com/me-nazim/criminal-archive/backend/internal/search"
+	"github.com/me-nazim/criminal-archive/backend/internal/settings"
 	"github.com/me-nazim/criminal-archive/backend/internal/stats"
 	"github.com/me-nazim/criminal-archive/backend/internal/storage"
 	"github.com/me-nazim/criminal-archive/backend/internal/users"
@@ -66,6 +70,45 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 		return r
 	}
 
+	// ---------- settings (encrypted KV) ----------
+	var cipher *settings.Cipher
+	if cfg.SettingsKey != "" {
+		c, err := settings.NewCipher(cfg.SettingsKey)
+		if err != nil {
+			logger.Warn("settings: cipher init failed; secrets will be stored in plaintext", "err", err)
+		} else {
+			cipher = c
+		}
+	} else {
+		logger.Warn("settings: APP_SETTINGS_KEY is not set; secrets will be stored in plaintext. Configure it before going to production.")
+	}
+	settingsStore := settings.New(pool, cipher, logger)
+	if err := settingsStore.Reload(context.Background()); err != nil {
+		logger.Warn("settings: initial reload failed", "err", err)
+	}
+	// Bootstrap storage row from env on first boot when admin hasn't
+	// supplied one yet — keeps existing dev workflows working.
+	bootstrapStorageFromEnv(context.Background(), cfg, settingsStore, logger)
+
+	// ---------- email + storage managers ----------
+	emailMgr := email.NewManager(pool, settingsStore, cfg.FrontendBaseURL, logger)
+	if err := emailMgr.Refresh(context.Background()); err != nil {
+		logger.Warn("email: refresh failed", "err", err)
+	}
+	emailMgr.StartWorker(context.Background())
+
+	storageMgr := storage.NewManager(settingsStore, logger)
+	if err := storageMgr.Refresh(context.Background()); err != nil {
+		if !errors.Is(err, storage.ErrUnconfigured) {
+			logger.Warn("storage: initial refresh failed", "err", err)
+		}
+	} else if cfg.AppEnv != "production" {
+		// Best-effort bucket creation in dev.
+		if c, cErr := storageMgr.Client(context.Background()); cErr == nil {
+			_ = c.EnsureBucket(context.Background())
+		}
+	}
+
 	// ---------- repositories & services ----------
 	authRepo := auth.NewRepository(pool)
 	jwtCfg := auth.JWTConfig{
@@ -80,6 +123,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 		CookieDomain: cfg.CookieDomain,
 		CookieSecure: cfg.CookieSecure,
 	}, logger)
+	resetHandlers := auth.NewResetHandlers(authSvc, authRepo, emailMgr, cfg.FrontendBaseURL, logger)
 
 	usersRepo := users.NewRepository(pool)
 	usersSvc := users.NewService(pool, usersRepo, authRepo, logger)
@@ -110,36 +154,14 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 	searchHandlers := search.NewHandlers(casesRepo, personsRepo, logger)
 	feedsHandlers := feeds.NewHandlers(casesRepo, personsRepo, cfg.AppBaseURL, logger)
 
-	// Object storage is optional: if config is missing we boot without it
-	// and skip the attachment routes. This lets the rest of the API keep
-	// working in a dev environment without R2/MinIO ready.
-	var attachHandlers *attachments.Handlers
-	if cfg.S3AccessKey != "" && cfg.S3SecretKey != "" && cfg.S3Bucket != "" {
-		store, err := storage.NewClient(context.Background(), storage.Config{
-			Endpoint:       cfg.S3Endpoint,
-			Region:         cfg.S3Region,
-			AccessKey:      cfg.S3AccessKey,
-			SecretKey:      cfg.S3SecretKey,
-			Bucket:         cfg.S3Bucket,
-			PublicBaseURL:  cfg.S3PublicBaseURL,
-			ForcePathStyle: cfg.S3ForcePathStyle,
-		})
-		if err != nil {
-			logger.Warn("storage init failed; attachment routes will be unavailable", "err", err)
-		} else {
-			// Best-effort: ensure the bucket exists (helpful for local minio).
-			if cfg.AppEnv != "production" {
-				if err := store.EnsureBucket(context.Background()); err != nil {
-					logger.Warn("storage: ensure bucket failed", "err", err)
-				}
-			}
-			attachRepo := attachments.NewRepository(pool)
-			attachHandlers = attachments.NewHandlers(attachRepo, casesRepo, store, []byte(cfg.JWTSecret), logger)
-			attachHandlers.SetAudit(pool, logger)
-		}
-	} else {
-		logger.Info("storage not configured; attachment routes disabled")
-	}
+	notifRepo := notifications.NewRepository(pool)
+	notifHandlers := notifications.NewHandlers(notifRepo, logger)
+
+	settingsHandlers := settings.NewHandlers(settingsStore, providerTester{email: emailMgr, storage: storageMgr}, logger)
+
+	attachRepo := attachments.NewRepository(pool)
+	attachHandlers := attachments.NewHandlers(attachRepo, casesRepo, storageMgr, []byte(cfg.JWTSecret), logger)
+	attachHandlers.SetAudit(pool, logger)
 
 	// ---------- mount ----------
 	feedsHandlers.Mount(r) // /feed.xml + /sitemap.xml at the root
@@ -153,6 +175,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 		// ---------- public ----------
 		api.Group(func(p chi.Router) {
 			p.Use(auth.OptionalAuthenticator(jwtCfg)) // light context awareness
+			settingsHandlers.MountPublic(p)
 			locHandlers.Mount(p)
 			crimeHandlers.Mount(p)
 			personsHandlers.MountPublic(p)
@@ -160,8 +183,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 			searchHandlers.Mount(p)
 		})
 
-		// ---------- public auth (register / login / refresh) ----------
+		// ---------- public auth (register / login / refresh / forgot) ----------
 		authHandlers.MountPublic(api)
+		resetHandlers.Mount(api)
 
 		// ---------- authenticated ----------
 		api.Group(func(p chi.Router) {
@@ -170,9 +194,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 			personsHandlers.MountAuthenticated(p)
 			casesHandlers.MountAuthenticated(p)
 			verifHandlers.MountAuthenticated(p)
-			if attachHandlers != nil {
-				attachHandlers.MountAuthenticated(p)
-			}
+			notifHandlers.Mount(p)
+			attachHandlers.MountAuthenticated(p)
 
 			// ---------- admin / super-admin ----------
 			p.Route("/admin", func(a chi.Router) {
@@ -183,14 +206,75 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 				verifHandlers.MountAdmin(a)
 				auditHandlers.Mount(a)
 				statsHandlers.Mount(a)
-				if attachHandlers != nil {
-					attachHandlers.MountAdmin(a)
-				}
+				attachHandlers.MountAdmin(a)
+				settingsHandlers.MountAdmin(a)
 			})
 		})
 	})
 
 	return r
+}
+
+// providerTester implements settings.ProviderTester by composing the
+// email + storage managers.
+type providerTester struct {
+	email   *email.Manager
+	storage *storage.Manager
+}
+
+func (p providerTester) TestEmail(r *http.Request, to string, cfg settings.EmailConfig) error {
+	return p.email.TestEmail(r, to, cfg)
+}
+
+func (p providerTester) TestStorage(r *http.Request, cfg settings.StorageConfig) error {
+	return p.storage.TestStorage(r, cfg)
+}
+
+// bootstrapStorageFromEnv populates the `storage` settings row from
+// legacy environment variables on first boot, so existing docker-compose
+// deployments keep working without manual intervention.
+func bootstrapStorageFromEnv(ctx context.Context, cfg *config.Config, store *settings.Store, logger *slog.Logger) {
+	if cfg.S3AccessKey == "" || cfg.S3SecretKey == "" || cfg.S3Bucket == "" {
+		return
+	}
+	cur, err := store.GetStorage(ctx)
+	if err == nil && cur.AccessKey != "" {
+		return // admin already configured it
+	}
+	driver := "s3_compatible"
+	if cfg.S3Endpoint == "" {
+		driver = "aws_s3"
+	} else if containsAny(cfg.S3Endpoint, "minio") {
+		driver = "minio"
+	} else if containsAny(cfg.S3Endpoint, "r2.cloudflarestorage.com") {
+		driver = "r2"
+	}
+	if err := store.Set(ctx, "storage", map[string]any{
+		"enabled":          true,
+		"driver":           driver,
+		"bucket":           cfg.S3Bucket,
+		"region":           cfg.S3Region,
+		"endpoint":         cfg.S3Endpoint,
+		"access_key":       cfg.S3AccessKey,
+		"secret_key":       cfg.S3SecretKey,
+		"public_base_url":  cfg.S3PublicBaseURL,
+		"force_path_style": cfg.S3ForcePathStyle,
+	}, settings.StorageSecretPaths, nil); err != nil {
+		logger.Warn("settings: bootstrap storage from env failed", "err", err)
+	}
+}
+
+func containsAny(haystack string, needles ...string) bool {
+	for _, n := range needles {
+		if n != "" && len(haystack) >= len(n) {
+			for i := 0; i+len(n) <= len(haystack); i++ {
+				if haystack[i:i+len(n)] == n {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func healthHandler(pool *pgxpool.Pool) http.HandlerFunc {

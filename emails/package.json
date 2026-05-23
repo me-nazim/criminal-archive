@@ -1,0 +1,19 @@
+{
+  "name": "tansiq-emails",
+  "version": "0.1.0",
+  "private": true,
+  "description": "React Email source for Tansiq Information Portal. Build to backend/internal/email/templates/.",
+  "scripts": {
+    "dev": "email dev --dir ./templates --port 3300",
+    "export": "email export --dir ./templates --outDir ../backend/internal/email/templates",
+    "build": "npm run export"
+  },
+  "dependencies": {
+    "@react-email/components": "^0.0.31",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "react-email": "^3.0.4"
+  }
+}

@@ -36,6 +36,10 @@ type Config struct {
 	S3PublicBaseURL   string
 	S3ForcePathStyle  bool
 
+	// SettingsKey unlocks AES-GCM-encrypted secret fields stored in
+	// app_settings. Required in production.
+	SettingsKey string
+
 	CORSAllowedOrigins []string
 
 	RateLimitRPS   int
@@ -70,6 +74,8 @@ func Load() (*Config, error) {
 		S3Bucket:         getEnv("S3_BUCKET", ""),
 		S3PublicBaseURL:  getEnv("S3_PUBLIC_BASE_URL", ""),
 		S3ForcePathStyle: getEnvBool("S3_FORCE_PATH_STYLE", true),
+
+		SettingsKey: getEnv("APP_SETTINGS_KEY", ""),
 
 		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5173")),
 

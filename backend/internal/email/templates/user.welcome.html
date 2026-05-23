@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light only" />
+  </head>
+  <body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f1320;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f7f9;padding:32px 16px;">
+      <tr><td align="center">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(15,19,32,0.06);">
+          <tr><td style="padding:24px 32px;border-bottom:1px solid #eceef2;">
+            <span style="display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:16px;color:#0f1320;">
+              <span style="display:inline-block;width:24px;height:24px;border-radius:6px;background:{{ .PrimaryColor }};"></span>
+              {{ .SiteName }}
+            </span>
+          </td></tr>
+          <tr><td style="padding:32px;">
+            <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.3;color:#0f1320;">Welcome, {{ .FullName }}.</h1>
+            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:#363d4b;">
+              Thank you for registering with <strong>{{ .SiteName }}</strong>. Your account is now in our review queue. An admin will verify your details before activating your access.
+            </p>
+            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:#363d4b;">
+              You will receive a follow-up email once your account is approved. In the meantime, you can browse public, verified cases on the portal.
+            </p>
+            <table role="presentation" cellspacing="0" cellpadding="0" style="margin:24px 0;">
+              <tr><td style="border-radius:8px;background:{{ .PrimaryColor }};">
+                <a href="{{ .SiteURL }}" style="display:inline-block;padding:12px 22px;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;">Open the portal</a>
+              </td></tr>
+            </table>
+            <p style="margin:24px 0 0 0;font-size:13px;line-height:1.6;color:#637087;">
+              If you did not register with {{ .SiteName }}, please ignore this email — no account will be activated without admin approval.
+            </p>
+          </td></tr>
+          <tr><td style="padding:20px 32px;background:#fafbfc;border-top:1px solid #eceef2;font-size:12px;color:#637087;">
+            © {{ .Year }} {{ .SiteName }}.
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>
