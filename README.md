@@ -76,6 +76,8 @@ The planning suite lives in [`docs/`](./docs/). Read in this order:
 4. [`docs/UI_DESIGN.md`](./docs/UI_DESIGN.md) — design language, component library, page-by-page specifications.
 5. [`docs/ROADMAP.md`](./docs/ROADMAP.md) — phased implementation plan with PR breakdown.
 
+For **operating** the deployed system see [`ops/RUNBOOK.md`](./ops/RUNBOOK.md).
+
 ## Roles
 
 `super_admin` · `admin` · `moderator` · `contributor` · `viewer` (+ anonymous public).
