@@ -11,7 +11,10 @@
     "submit": "Submit",
     "about": "About",
     "login": "Login",
-    "register": "Register"
+    "register": "Register",
+    "me": "My account",
+    "admin": "Admin",
+    "logout": "Log out"
   },
   "footer": {
     "rights": "All rights reserved.",
@@ -26,10 +29,120 @@
   "common": {
     "loading": "Loading…",
     "error": "Something went wrong.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "email": "Email",
+    "password": "Password",
+    "full_name": "Full name",
+    "phone": "Phone (optional)",
+    "required_field": "This field is required.",
+    "invalid_email": "Enter a valid email.",
+    "never": "Never",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "approve": "Approve",
+    "reject": "Reject"
   },
   "notfound": {
     "title": "Page not found",
     "back_home": "Back to home"
+  },
+  "forbidden": {
+    "title": "Access denied",
+    "message": "You do not have permission to view this page."
+  },
+  "login": {
+    "title": "Log in",
+    "subtitle": "Sign in to your account.",
+    "cta": "Log in",
+    "no_account": "No account?",
+    "register_link": "Create one",
+    "error_generic": "Could not log in. Please try again."
+  },
+  "register": {
+    "title": "Register",
+    "subtitle": "Submit a registration request. Your account will be active after admin approval.",
+    "cta": "Register",
+    "have_account": "Already have an account?",
+    "confirm_password": "Confirm password",
+    "password_help": "At least 10 characters.",
+    "password_mismatch": "Passwords do not match.",
+    "error_generic": "Could not register. Please try again."
+  },
+  "register_pending": {
+    "title": "Application received",
+    "message": "Your account is awaiting admin approval. You will be able to log in once it is approved.",
+    "home_link": "Go home"
+  },
+  "me": {
+    "id": "Account ID",
+    "created_at": "Created",
+    "last_login": "Last login",
+    "logout": "Log out"
+  },
+  "role": {
+    "super_admin": "Super-admin",
+    "admin": "Admin",
+    "moderator": "Moderator",
+    "contributor": "Contributor",
+    "viewer": "Viewer"
+  },
+  "user_status": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "suspended": "Suspended",
+    "rejected": "Rejected"
+  },
+  "admin": {
+    "nav_title": "Admin",
+    "nav_dashboard": "Dashboard",
+    "nav_approvals": "Approvals",
+    "nav_users": "Users",
+    "dashboard": {
+      "title": "Admin dashboard",
+      "subtitle": "Key metrics and pending work at a glance.",
+      "pending_users": "Pending approvals",
+      "cases_pending": "Cases awaiting verification",
+      "cases_published": "Published cases"
+    },
+    "approvals": {
+      "title": "User approvals",
+      "subtitle": "Approve or reject newly registered users.",
+      "empty_title": "No pending requests",
+      "empty_message": "New registrations will appear here.",
+      "pending_count_suffix": "pending",
+      "approve": "Approve",
+      "reject": "Reject"
+    },
+    "users": {
+      "title": "User management",
+      "subtitle": "Browse all users; change role and status.",
+      "search": "Search",
+      "filter_status": "Status",
+      "filter_role": "Role",
+      "any": "Any",
+      "empty": "No users matched these filters.",
+      "col_user": "User",
+      "col_role": "Role",
+      "col_status": "Status",
+      "col_actions": "Actions",
+      "rows_suffix": "rows",
+      "suspend": "Suspend",
+      "reactivate": "Reactivate"
+    }
+  },
+  "location": {
+    "country": "Country",
+    "division": "Division",
+    "district": "District",
+    "upazila": "Upazila / city",
+    "select_country": "Select a country",
+    "select_division": "Select a division",
+    "select_district": "Select a district",
+    "select_upazila": "Select an upazila",
+    "text_label": "Detailed address",
+    "text_help": "Optional — village / neighbourhood / landmark, etc.",
+    "text_placeholder": "e.g. Savar Bazar, Mirzapur village"
   }
 }

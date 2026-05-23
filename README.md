@@ -24,11 +24,26 @@ cp .env.example .env
 # 2. Start everything (postgres + minio + backend + frontend)
 docker compose up --build
 
-# 3. Open
+# 3. Apply schema migrations and load reference data
+docker compose exec backend /app/api migrate up
+docker compose exec backend /app/api seed
+
+# 4. Bootstrap the very first super-admin
+docker compose exec backend /app/api admin bootstrap \
+    --email you@example.com \
+    --name  "Your Name" \
+    --password "a-strong-password-of-your-choice" \
+    --role  super_admin
+
+# 5. Open
 #   Frontend  → http://localhost:5173
 #   API       → http://localhost:8080/health
 #   MinIO UI  → http://localhost:9001  (S3-compatible R2 substitute)
 ```
+
+After step 4 you can log in at `http://localhost:5173/login`, approve other
+registrations from `/admin/approvals`, and manage roles from
+`/admin/users`.
 
 ### Run services individually
 
