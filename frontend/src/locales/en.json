@@ -116,6 +116,21 @@
     "hidden": "Hidden (admin)",
     "internal": "Internal (admin)"
   },
+  "verification_status": {
+    "unassigned": "Unassigned",
+    "assigned": "Assigned",
+    "in_progress": "In progress",
+    "verified": "Verified",
+    "rejected": "Rejected"
+  },
+  "search": {
+    "title": "Search",
+    "input_label": "Search",
+    "placeholder": "Title, case number, person name…",
+    "idle_title": "Start searching",
+    "idle_message": "Type a title, case number, or name and press Enter.",
+    "empty_title": "No results"
+  },
   "admin": {
     "nav_title": "Admin",
     "nav_dashboard": "Dashboard",
@@ -123,12 +138,17 @@
     "nav_users": "Users",
     "nav_cases": "Cases",
     "nav_persons": "Profiles",
+    "nav_verification": "Verification",
+    "nav_audit": "Audit log",
     "dashboard": {
       "title": "Admin dashboard",
       "subtitle": "Key metrics and pending work at a glance.",
       "pending_users": "Pending approvals",
       "cases_pending": "Cases awaiting verification",
-      "cases_published": "Published cases"
+      "cases_published": "Published cases",
+      "persons_pending": "Profiles awaiting review",
+      "cases_by_status": "Cases by status",
+      "users_by_status": "Users by status"
     },
     "approvals": {
       "title": "User approvals",
@@ -187,6 +207,34 @@
       "unpublish": "Unpublish",
       "delete_case": "Delete this case",
       "confirm_delete": "Are you sure? This will permanently delete the case."
+    },
+    "verification": {
+      "title": "Verification",
+      "subtitle": "Cases assigned to you for review and the full verification queue.",
+      "tab_mine": "My queue",
+      "tab_all": "All",
+      "mine_help": "Cases assigned to you, awaiting review.",
+      "all_help": "Every verification assignment in the system.",
+      "empty_title": "Nothing pending",
+      "empty_message": "New assignments will appear here.",
+      "assigned_at": "Assigned:",
+      "start": "Start",
+      "review": "Review"
+    },
+    "audit": {
+      "title": "Audit log",
+      "subtitle": "Append-only record of every privileged action.",
+      "filter_action": "Action",
+      "filter_target": "Target type",
+      "filter_user": "User ID",
+      "empty": "No events found.",
+      "col_when": "When",
+      "col_action": "Action",
+      "col_target": "Target",
+      "col_user": "User",
+      "col_metadata": "Metadata",
+      "rows_suffix": "events",
+      "more_available": "more available"
     }
   },
   "location": {

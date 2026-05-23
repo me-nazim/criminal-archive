@@ -16,14 +16,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/me-nazim/criminal-archive/backend/internal/attachments"
+	"github.com/me-nazim/criminal-archive/backend/internal/audit"
 	"github.com/me-nazim/criminal-archive/backend/internal/auth"
 	"github.com/me-nazim/criminal-archive/backend/internal/cases"
 	"github.com/me-nazim/criminal-archive/backend/internal/config"
 	"github.com/me-nazim/criminal-archive/backend/internal/crimetypes"
+	"github.com/me-nazim/criminal-archive/backend/internal/feeds"
 	"github.com/me-nazim/criminal-archive/backend/internal/locations"
 	"github.com/me-nazim/criminal-archive/backend/internal/persons"
+	"github.com/me-nazim/criminal-archive/backend/internal/search"
+	"github.com/me-nazim/criminal-archive/backend/internal/stats"
 	"github.com/me-nazim/criminal-archive/backend/internal/storage"
 	"github.com/me-nazim/criminal-archive/backend/internal/users"
+	"github.com/me-nazim/criminal-archive/backend/internal/verification"
 )
 
 // New constructs the top-level HTTP handler. When pool is nil, only
@@ -85,6 +90,17 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 	casesSvc := cases.NewService(pool, casesRepo, logger)
 	casesHandlers := cases.NewHandlers(casesRepo, casesSvc, logger)
 
+	verifRepo := verification.NewRepository(pool)
+	verifHandlers := verification.NewHandlers(verifRepo, logger)
+
+	auditRepo := audit.NewRepository(pool)
+	auditHandlers := audit.NewHandlers(auditRepo, logger)
+
+	statsHandlers := stats.NewHandlers(pool, logger)
+
+	searchHandlers := search.NewHandlers(casesRepo, personsRepo, logger)
+	feedsHandlers := feeds.NewHandlers(casesRepo, personsRepo, cfg.AppBaseURL, logger)
+
 	// Object storage is optional: if config is missing we boot without it
 	// and skip the attachment routes. This lets the rest of the API keep
 	// working in a dev environment without R2/MinIO ready.
@@ -117,6 +133,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 	}
 
 	// ---------- mount ----------
+	feedsHandlers.Mount(r) // /feed.xml + /sitemap.xml at the root
+
 	r.Route("/api/v1", func(api chi.Router) {
 		api.Get("/version", versionHandler)
 		api.Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
@@ -130,6 +148,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 			crimeHandlers.Mount(p)
 			personsHandlers.MountPublic(p)
 			casesHandlers.MountPublic(p)
+			searchHandlers.Mount(p)
 		})
 
 		// ---------- public auth (register / login / refresh) ----------
@@ -141,6 +160,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 			authHandlers.MountAuthenticated(p)
 			personsHandlers.MountAuthenticated(p)
 			casesHandlers.MountAuthenticated(p)
+			verifHandlers.MountAuthenticated(p)
 			if attachHandlers != nil {
 				attachHandlers.MountAuthenticated(p)
 			}
@@ -151,6 +171,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 				usersHandlers.Mount(a)
 				personsHandlers.MountAdmin(a)
 				casesHandlers.MountAdmin(a)
+				verifHandlers.MountAdmin(a)
+				auditHandlers.Mount(a)
+				statsHandlers.Mount(a)
 				if attachHandlers != nil {
 					attachHandlers.MountAdmin(a)
 				}
