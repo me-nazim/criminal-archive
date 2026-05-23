@@ -43,7 +43,7 @@ export default function Header() {
             {t('nav.persons')}
           </NavLink>
           {user && (
-            <NavLink to="/me/cases/new" className={navItem}>
+            <NavLink to="/me/cases" className={navItem}>
               {t('nav.submit')}
             </NavLink>
           )}

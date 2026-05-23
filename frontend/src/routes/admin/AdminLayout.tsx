@@ -3,7 +3,7 @@
 
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Users, LayoutDashboard, ShieldAlert } from 'lucide-react'
+import { FileText, LayoutDashboard, ShieldAlert, Users, UserSquare } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 export default function AdminLayout() {
@@ -18,8 +18,8 @@ export default function AdminLayout() {
     )
 
   return (
-    <div className="grid min-h-[calc(100vh-9rem)] grid-cols-[16rem_1fr] gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <aside className="flex flex-col gap-1 border-r border-ink-200 pr-4">
+    <div className="grid min-h-[calc(100vh-9rem)] grid-cols-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[16rem_1fr] lg:px-8">
+      <aside className="flex flex-col gap-1 lg:border-r lg:border-ink-200 lg:pr-4">
         <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
           {t('admin.nav_title')}
         </p>
@@ -34,6 +34,14 @@ export default function AdminLayout() {
         <NavLink to="/admin/users" className={itemCls}>
           <Users className="h-4 w-4" aria-hidden />
           {t('admin.nav_users')}
+        </NavLink>
+        <NavLink to="/admin/cases" className={itemCls}>
+          <FileText className="h-4 w-4" aria-hidden />
+          {t('admin.nav_cases')}
+        </NavLink>
+        <NavLink to="/admin/persons" className={itemCls}>
+          <UserSquare className="h-4 w-4" aria-hidden />
+          {t('admin.nav_persons')}
         </NavLink>
       </aside>
       <main className="min-w-0">

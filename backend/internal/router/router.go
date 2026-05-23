@@ -15,10 +15,14 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/me-nazim/criminal-archive/backend/internal/attachments"
 	"github.com/me-nazim/criminal-archive/backend/internal/auth"
+	"github.com/me-nazim/criminal-archive/backend/internal/cases"
 	"github.com/me-nazim/criminal-archive/backend/internal/config"
 	"github.com/me-nazim/criminal-archive/backend/internal/crimetypes"
 	"github.com/me-nazim/criminal-archive/backend/internal/locations"
+	"github.com/me-nazim/criminal-archive/backend/internal/persons"
+	"github.com/me-nazim/criminal-archive/backend/internal/storage"
 	"github.com/me-nazim/criminal-archive/backend/internal/users"
 )
 
@@ -45,7 +49,6 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 	r.Get("/health", healthHandler(pool))
 
 	if pool == nil {
-		// Without a DB nothing else can usefully exist.
 		return r
 	}
 
@@ -74,31 +77,83 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 	crimeRepo := crimetypes.NewRepository(pool)
 	crimeHandlers := crimetypes.NewHandlers(crimeRepo, logger)
 
+	personsRepo := persons.NewRepository(pool)
+	personsSvc := persons.NewService(pool, personsRepo, logger)
+	personsHandlers := persons.NewHandlers(personsRepo, personsSvc, logger)
+
+	casesRepo := cases.NewRepository(pool)
+	casesSvc := cases.NewService(pool, casesRepo, logger)
+	casesHandlers := cases.NewHandlers(casesRepo, casesSvc, logger)
+
+	// Object storage is optional: if config is missing we boot without it
+	// and skip the attachment routes. This lets the rest of the API keep
+	// working in a dev environment without R2/MinIO ready.
+	var attachHandlers *attachments.Handlers
+	if cfg.S3AccessKey != "" && cfg.S3SecretKey != "" && cfg.S3Bucket != "" {
+		store, err := storage.NewClient(context.Background(), storage.Config{
+			Endpoint:       cfg.S3Endpoint,
+			Region:         cfg.S3Region,
+			AccessKey:      cfg.S3AccessKey,
+			SecretKey:      cfg.S3SecretKey,
+			Bucket:         cfg.S3Bucket,
+			PublicBaseURL:  cfg.S3PublicBaseURL,
+			ForcePathStyle: cfg.S3ForcePathStyle,
+		})
+		if err != nil {
+			logger.Warn("storage init failed; attachment routes will be unavailable", "err", err)
+		} else {
+			// Best-effort: ensure the bucket exists (helpful for local minio).
+			if cfg.AppEnv != "production" {
+				if err := store.EnsureBucket(context.Background()); err != nil {
+					logger.Warn("storage: ensure bucket failed", "err", err)
+				}
+			}
+			attachRepo := attachments.NewRepository(pool)
+			attachHandlers = attachments.NewHandlers(attachRepo, casesRepo, store, []byte(cfg.JWTSecret), logger)
+			attachHandlers.SetAudit(pool, logger)
+		}
+	} else {
+		logger.Info("storage not configured; attachment routes disabled")
+	}
+
 	// ---------- mount ----------
 	r.Route("/api/v1", func(api chi.Router) {
 		api.Get("/version", versionHandler)
-
-		// Public ping retained as a smoke endpoint.
 		api.Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]string{"message": "pong"})
 		})
 
-		// Public reference data.
-		locHandlers.Mount(api)
-		crimeHandlers.Mount(api)
+		// ---------- public ----------
+		api.Group(func(p chi.Router) {
+			p.Use(auth.OptionalAuthenticator(jwtCfg)) // light context awareness
+			locHandlers.Mount(p)
+			crimeHandlers.Mount(p)
+			personsHandlers.MountPublic(p)
+			casesHandlers.MountPublic(p)
+		})
 
-		// Public auth (register, login, refresh).
+		// ---------- public auth (register / login / refresh) ----------
 		authHandlers.MountPublic(api)
 
-		// Authenticated routes.
+		// ---------- authenticated ----------
 		api.Group(func(p chi.Router) {
 			p.Use(auth.Authenticator(jwtCfg))
 			authHandlers.MountAuthenticated(p)
+			personsHandlers.MountAuthenticated(p)
+			casesHandlers.MountAuthenticated(p)
+			if attachHandlers != nil {
+				attachHandlers.MountAuthenticated(p)
+			}
 
-			// Admin-only routes.
+			// ---------- admin / super-admin ----------
 			p.Route("/admin", func(a chi.Router) {
 				a.Use(auth.RequireMinRole(auth.RoleAdmin))
 				usersHandlers.Mount(a)
+				personsHandlers.MountAdmin(a)
+				casesHandlers.MountAdmin(a)
+				if attachHandlers != nil {
+					attachHandlers.MountAdmin(a)
+				}
 			})
 		})
 	})
@@ -128,8 +183,6 @@ func healthHandler(pool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-// versionHandler returns a small payload identifying the running build.
-// The build sha and version are wired in at build time via -ldflags.
 func versionHandler(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version": Version,

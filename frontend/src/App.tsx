@@ -6,15 +6,28 @@ import { RequireAuth } from './components/RequireAuth'
 import Home from './routes/Home'
 import NotFound from './routes/NotFound'
 import Forbidden from './routes/Forbidden'
+
 import Login from './routes/Login'
 import Register from './routes/Register'
 import RegisterPending from './routes/RegisterPending'
 import Me from './routes/Me'
 
+import Cases from './routes/Cases'
+import CaseDetail from './routes/CaseDetail'
+import Persons from './routes/Persons'
+import PersonProfile from './routes/PersonProfile'
+
+import MyCases from './routes/MyCases'
+import MyCaseNew from './routes/MyCaseNew'
+import MyCaseEdit from './routes/MyCaseEdit'
+
 import AdminLayout from './routes/admin/AdminLayout'
-import Dashboard from './routes/admin/Dashboard'
-import Approvals from './routes/admin/Approvals'
-import Users from './routes/admin/Users'
+import AdminDashboard from './routes/admin/Dashboard'
+import AdminApprovals from './routes/admin/Approvals'
+import AdminUsers from './routes/admin/Users'
+import AdminCases from './routes/admin/Cases'
+import AdminCaseEdit from './routes/admin/CaseEdit'
+import AdminPersons from './routes/admin/Persons'
 
 export default function App() {
   return (
@@ -22,12 +35,18 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Home />} />
 
-        {/* Public auth routes */}
+        {/* Public read */}
+        <Route path="cases" element={<Cases />} />
+        <Route path="cases/:key" element={<CaseDetail />} />
+        <Route path="persons" element={<Persons />} />
+        <Route path="persons/:slug" element={<PersonProfile />} />
+
+        {/* Public auth */}
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
         <Route path="register/pending" element={<RegisterPending />} />
 
-        {/* Authenticated user routes */}
+        {/* Authenticated user */}
         <Route
           path="me"
           element={
@@ -36,8 +55,32 @@ export default function App() {
             </RequireAuth>
           }
         />
+        <Route
+          path="me/cases"
+          element={
+            <RequireAuth>
+              <MyCases />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="me/cases/new"
+          element={
+            <RequireAuth>
+              <MyCaseNew />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="me/cases/:id/edit"
+          element={
+            <RequireAuth>
+              <MyCaseEdit />
+            </RequireAuth>
+          }
+        />
 
-        {/* Admin routes (admin or super-admin) */}
+        {/* Admin */}
         <Route
           path="admin"
           element={
@@ -46,9 +89,12 @@ export default function App() {
             </RequireAuth>
           }
         >
-          <Route index element={<Dashboard />} />
-          <Route path="approvals" element={<Approvals />} />
-          <Route path="users" element={<Users />} />
+          <Route index element={<AdminDashboard />} />
+          <Route path="approvals" element={<AdminApprovals />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="cases" element={<AdminCases />} />
+          <Route path="cases/:id" element={<AdminCaseEdit />} />
+          <Route path="persons" element={<AdminPersons />} />
         </Route>
 
         {/* Misc */}
