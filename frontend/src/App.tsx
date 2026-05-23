@@ -16,6 +16,7 @@ import Cases from './routes/Cases'
 import CaseDetail from './routes/CaseDetail'
 import Persons from './routes/Persons'
 import PersonProfile from './routes/PersonProfile'
+import Search from './routes/Search'
 
 import MyCases from './routes/MyCases'
 import MyCaseNew from './routes/MyCaseNew'
@@ -28,6 +29,8 @@ import AdminUsers from './routes/admin/Users'
 import AdminCases from './routes/admin/Cases'
 import AdminCaseEdit from './routes/admin/CaseEdit'
 import AdminPersons from './routes/admin/Persons'
+import AdminVerification from './routes/admin/Verification'
+import AdminAuditLog from './routes/admin/AuditLog'
 
 export default function App() {
   return (
@@ -40,6 +43,7 @@ export default function App() {
         <Route path="cases/:key" element={<CaseDetail />} />
         <Route path="persons" element={<Persons />} />
         <Route path="persons/:slug" element={<PersonProfile />} />
+        <Route path="search" element={<Search />} />
 
         {/* Public auth */}
         <Route path="login" element={<Login />} />
@@ -95,6 +99,8 @@ export default function App() {
           <Route path="cases" element={<AdminCases />} />
           <Route path="cases/:id" element={<AdminCaseEdit />} />
           <Route path="persons" element={<AdminPersons />} />
+          <Route path="verification" element={<AdminVerification />} />
+          <Route path="audit-log" element={<AdminAuditLog />} />
         </Route>
 
         {/* Misc */}
