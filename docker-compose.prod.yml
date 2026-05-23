@@ -1,0 +1,47 @@
+# Production-only compose. Differs from docker-compose.yml in that:
+#   - There is no postgres container (we point at the managed DB).
+#   - There is no MinIO container (we point at Cloudflare R2).
+#   - The frontend image is the nginx-served static build.
+#   - The metrics port is bound to localhost only.
+#
+# Driven by `.env` next to this file. See ops/RUNBOOK.md for the full
+# provisioning sequence.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: ghcr.io/me-nazim/tansiq-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "8080"
+    # Metrics endpoint stays on localhost; scrape via SSH tunnel or a
+    # private Prometheus.
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        VITE_API_BASE_URL: ${APP_BASE_URL:-https://api.tansiq.org}
+    image: ghcr.io/me-nazim/tansiq-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: backend/go.sum
+      - run: go mod download
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test ./... -count=1 -race -timeout 60s
+
+  frontend:
+    name: Frontend (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  migrations-up-down:
+    name: Migrations up + down (Postgres 18)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_USER: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: backend/go.sum
+      - run: go mod download
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci?sslmode=disable
+          JWT_SECRET: ci-secret-please-replace-must-be-long-enough
+        run: |
+          go run ./cmd/api migrate up
+          go run ./cmd/api seed
+          go run ./cmd/api migrate status
+      - name: Roll back to empty schema
+        env:
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci?sslmode=disable
+          JWT_SECRET: ci-secret-please-replace-must-be-long-enough
+        run: go run ./cmd/api migrate down

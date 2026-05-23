@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -23,6 +23,8 @@ import (
 	"github.com/me-nazim/criminal-archive/backend/internal/crimetypes"
 	"github.com/me-nazim/criminal-archive/backend/internal/feeds"
 	"github.com/me-nazim/criminal-archive/backend/internal/locations"
+	"github.com/me-nazim/criminal-archive/backend/internal/metrics"
+	tipmw "github.com/me-nazim/criminal-archive/backend/internal/middleware"
 	"github.com/me-nazim/criminal-archive/backend/internal/persons"
 	"github.com/me-nazim/criminal-archive/backend/internal/search"
 	"github.com/me-nazim/criminal-archive/backend/internal/stats"
@@ -37,10 +39,16 @@ import (
 func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(chimw.RequestID)
+	r.Use(chimw.RealIP)
+	r.Use(chimw.Recoverer)
+	r.Use(chimw.Timeout(60 * time.Second))
+	r.Use(tipmw.SecurityHeaders)
+	r.Use(tipmw.AccessLog(logger))
+	r.Use(metrics.Middleware)
+
+	rl := tipmw.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst, 0)
+	r.Use(rl.Middleware())
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.CORSAllowedOrigins,
@@ -52,6 +60,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) http.Handl
 	}))
 
 	r.Get("/health", healthHandler(pool))
+	r.Handle("/metrics", metrics.Handler())
 
 	if pool == nil {
 		return r
