@@ -30,7 +30,7 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 
-# Local data
-data/
-uploads/
-tmp/
+# Local data (only the workspace root, not anywhere else in the tree)
+/data/
+/uploads/
+/tmp/

@@ -21,9 +21,12 @@ type Config struct {
 	DatabaseURL string
 
 	JWTSecret     string
+	JWTIssuer     string
 	JWTAccessTTL  time.Duration
 	JWTRefreshTTL time.Duration
 	BcryptCost    int
+	CookieSecure  bool
+	CookieDomain  string
 
 	S3Endpoint        string
 	S3Region          string
@@ -57,6 +60,9 @@ func Load() (*Config, error) {
 		DatabaseURL: getEnv("DATABASE_URL", ""),
 
 		JWTSecret:        getEnv("JWT_SECRET", ""),
+		JWTIssuer:        getEnv("JWT_ISSUER", "tansiq"),
+		CookieSecure:     getEnvBool("COOKIE_SECURE", false),
+		CookieDomain:     getEnv("COOKIE_DOMAIN", ""),
 		S3Endpoint:       getEnv("S3_ENDPOINT", ""),
 		S3Region:         getEnv("S3_REGION", "auto"),
 		S3AccessKey:      getEnv("S3_ACCESS_KEY", ""),
@@ -85,6 +91,9 @@ func Load() (*Config, error) {
 
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
+	}
+	if len(cfg.JWTSecret) < 32 && cfg.AppEnv != "test" {
+		return nil, fmt.Errorf("JWT_SECRET must be at least 32 characters")
 	}
 	return cfg, nil
 }
