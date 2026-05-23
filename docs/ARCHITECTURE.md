@@ -215,7 +215,272 @@ docker compose exec -T postgres \
 - We will publish a takedown / dispute process before the first public
   release.
 
-## 12. Open questions
+## 12. Sequence diagrams
+
+These flows are referenced from the API spec ([`API_SPEC.md`](./API_SPEC.md))
+and the UI design ([`UI_DESIGN.md`](./UI_DESIGN.md)). They use ASCII so they
+render natively on GitHub without external tools.
+
+### 12.1 Case submission, verification, publication
+
+```
+Contributor          Frontend               API                Postgres        Verifier        Admin
+    │                    │                   │                    │              │              │
+    │ 1. Fill form       │                   │                    │              │              │
+    │───────────────────▶│                   │                    │              │              │
+    │                    │ 2. POST /cases    │                    │              │              │
+    │                    │──────────────────▶│ INSERT cases       │              │              │
+    │                    │                   │ status=draft       │              │              │
+    │                    │                   │───────────────────▶│              │              │
+    │                    │ 3. 201 + case_id  │                    │              │              │
+    │◀───────────────────│◀──────────────────│                    │              │              │
+    │                    │                   │                    │              │              │
+    │ 4. (Phase 5)       │                   │                    │              │              │
+    │   uploads files    │── presign + PUT R2 ─ ─ ─ ─ ─ ─ ─ ─ ─ ─▶│              │              │
+    │                    │── finalize ──────▶│ INSERT case_attach │              │              │
+    │                    │                   │───────────────────▶│              │              │
+    │                    │                   │                    │              │              │
+    │ 5. Submit          │                   │                    │              │              │
+    │───────────────────▶│ POST submit       │                    │              │              │
+    │                    │──────────────────▶│ UPDATE status =    │              │              │
+    │                    │                   │   pending_review   │              │              │
+    │                    │                   │ INSERT audit_log   │              │              │
+    │                    │                   │───────────────────▶│              │              │
+    │                    │                   │                    │              │              │
+    │                    │                   │      6. Admin assigns verifier   │              │
+    │                    │                   │◀──────────────────────────────────│──────────────│
+    │                    │                   │ INSERT verification│              │              │
+    │                    │                   │ UPDATE status =    │              │              │
+    │                    │                   │   in_verification  │              │              │
+    │                    │                   │───────────────────▶│              │              │
+    │                    │                   │                    │              │              │
+    │                    │                   │ 7. Verifier decides│ verified     │              │
+    │                    │                   │◀──────────────────────────────────│              │
+    │                    │                   │ UPDATE verification│              │              │
+    │                    │                   │ UPDATE status =    │              │              │
+    │                    │                   │   approved         │              │              │
+    │                    │                   │───────────────────▶│              │              │
+    │                    │                   │                    │              │              │
+    │                    │                   │ 8. Admin publishes │              │              │
+    │                    │                   │◀──────────────────────────────────│──────────────│
+    │                    │                   │ UPDATE status =    │              │              │
+    │                    │                   │   published        │              │              │
+    │                    │                   │ INSERT audit_log   │              │              │
+    │                    │                   │ purge CDN cache    │              │              │
+    │                    │                   │───────────────────▶│              │              │
+    │                    │                   │                    │              │              │
+    │ 9. Public sees /cases/:slug                                 │              │              │
+```
+
+### 12.2 File upload (presign → PUT → finalize)
+
+```
+Browser          API                R2 / MinIO         Postgres
+  │                │                    │                  │
+  │ 1. presign     │                    │                  │
+  │   (kind, mime, │                    │                  │
+  │    size, name) │                    │                  │
+  │───────────────▶│                    │                  │
+  │                │ 2. allocate seq_no │                  │
+  │                │    in tx           │                  │
+  │                │───────────────────────────────────────▶│
+  │                │ 3. compute key:    │                  │
+  │                │   TIP-2026-00045_  │                  │
+  │                │   evidence_03.jpg  │                  │
+  │                │ 4. sign PUT URL    │                  │
+  │                │   (expiry 5 min)   │                  │
+  │ 5. {url, key,  │                    │                  │
+  │    presign_tok}│                    │                  │
+  │◀───────────────│                    │                  │
+  │                │                    │                  │
+  │ 6. PUT bytes ─────────────────────▶│ store object     │
+  │ 7. 200 + ETag ◀─────────────────────│                  │
+  │                │                    │                  │
+  │ 8. finalize    │                    │                  │
+  │   (presign_tok,│                    │                  │
+  │    etag)       │                    │                  │
+  │───────────────▶│ 9. HEAD object ───▶│ confirm exists   │
+  │                │ 10. INSERT         │                  │
+  │                │    case_attachments│                  │
+  │                │───────────────────────────────────────▶│
+  │                │ 11. enqueue async  │                  │
+  │                │    {checksum,      │                  │
+  │                │     image_meta,    │                  │
+  │                │     virus_scan}    │                  │
+  │ 12. attachment │                    │                  │
+  │◀───────────────│                    │                  │
+```
+
+Notes:
+- **Step 2** atomically reserves `(case_id, kind, sequence_no)` so two
+  parallel uploads on the same case never collide.
+- **Steps 8–9** prevent a user from finalising a key that was never
+  actually uploaded.
+- The async job in step 11 is, for v1, a goroutine pool inside the API
+  process. We promote it to a real queue (NATS / Redis Streams) only when
+  we measure backpressure.
+
+### 12.3 Auth: login, refresh, logout
+
+```
+Browser            API              Postgres
+  │                  │                  │
+  │ POST /login      │                  │
+  │ {email, pw}      │                  │
+  │─────────────────▶│ SELECT user      │
+  │                  │ verify bcrypt    │
+  │                  │─────────────────▶│
+  │                  │ INSERT session   │
+  │                  │  (refresh_hash)  │
+  │                  │─────────────────▶│
+  │ 200 access_jwt   │                  │
+  │ Set-Cookie       │                  │
+  │  tip_refresh=    │                  │
+  │  ...             │                  │
+  │◀─────────────────│                  │
+  │                  │                  │
+  │ ── 15 min later ──                  │
+  │                  │                  │
+  │ GET /me          │                  │
+  │ + expired JWT    │                  │
+  │─────────────────▶│ 401 token_expired│
+  │◀─────────────────│                  │
+  │                  │                  │
+  │ POST /refresh    │                  │
+  │ + tip_refresh    │                  │
+  │─────────────────▶│ verify hash      │
+  │                  │ rotate row       │
+  │                  │─────────────────▶│
+  │ 200 access_jwt   │                  │
+  │ Set-Cookie new   │                  │
+  │◀─────────────────│                  │
+  │                  │                  │
+  │ POST /logout     │                  │
+  │─────────────────▶│ revoke session   │
+  │                  │─────────────────▶│
+  │ 204              │                  │
+  │◀─────────────────│                  │
+```
+
+A single refresh token may **not** be reused. Replays mark the user's
+session row as compromised and revoke every active session for that user.
+
+## 13. Deployment topology
+
+For v1 we target a single small production environment. The architecture
+below scales horizontally without code changes.
+
+```
+                ┌─────────────────────────┐
+                │       Cloudflare        │   (DNS + WAF + CDN)
+                │   tansiq.org / api.*    │
+                └────────┬────────┬───────┘
+                         │        │
+            static SPA   │        │   /api/v1/*
+            (HTML/CSS/JS │        │
+            from R2 or   │        │
+            nginx)       │        │
+                         ▼        ▼
+              ┌─────────────┐  ┌──────────────────┐
+              │  nginx      │  │  Go API (1..N)   │
+              │  (frontend) │  │  systemd / docker│
+              └─────────────┘  └────┬─────────────┘
+                                    │
+                       ┌────────────┴────────────┐
+                       │                         │
+                       ▼                         ▼
+              ┌──────────────────┐     ┌──────────────────┐
+              │  PostgreSQL 18   │     │  Cloudflare R2   │
+              │  (managed)       │     │  bucket: archive │
+              └──────────────────┘     └──────────────────┘
+                       │
+                       ▼
+              ┌──────────────────┐
+              │ Backup: nightly  │
+              │ pg_dump → R2     │
+              │ (separate bucket)│
+              └──────────────────┘
+```
+
+| Concern | v1 choice | Notes |
+| -- | -- | -- |
+| Compute | 1 × VPS (2 vCPU, 4 GB) running docker compose | Scaled by adding API replicas behind nginx. |
+| DB | Managed Postgres 18 (Neon / Supabase / Railway) | PITR enabled. |
+| Storage | Cloudflare R2 | No egress fees; separate buckets for archive, hidden, internal. |
+| Edge | Cloudflare proxy in front of both `tansiq.org` and `api.tansiq.org` | Caches public reads. |
+| Email | A transactional provider (Resend / Postmark) | Used for password reset and admin notifications only. |
+| Secrets | `.env` on the host, mode 600, owned by deploy user | Plus a backup copy in a password manager. |
+| TLS | Cloudflare-issued strict TLS at edge; self-signed inside Docker network. | |
+
+We deliberately do **not** introduce: Kubernetes, message queues, Redis,
+Elasticsearch, or a service mesh. They become available to us only when a
+specific NFR forces them.
+
+## 14. Backups & disaster recovery
+
+| Concern | Mechanism | Target |
+| -- | -- | -- |
+| **Postgres** | Daily `pg_dump --format=custom` shipped to a separate R2 bucket; managed provider PITR additionally retained 7 days. | RPO ≤ 24 h |
+| **Object storage** | R2 lifecycle policy: 90 days hot → infrequent access; cross-region replication for the `archive-public` bucket. | RPO ≤ 1 h |
+| **Configuration** | All in repo or in `.env.example`. Real `.env` mirrored to a password manager on every change. | RPO 0 |
+| **Restore drill** | Once per quarter, restore the previous night's dump into a staging DB and run a smoke test. | RTO ≤ 4 h |
+
+The runbook for a full DR (`ops/RUNBOOK.md`, ships in Phase 10) covers:
+1. Provision a fresh VPS from a known image.
+2. Restore the latest `pg_dump` into a new managed Postgres.
+3. Re-point Cloudflare DNS to the new edge.
+4. Invalidate all CDN caches.
+
+## 15. Observability
+
+### 15.1 Logging
+
+- Single structured JSON logger (`log/slog`) per process.
+- Mandatory fields per request: `time`, `level`, `msg`, `request_id`,
+  `method`, `path`, `status`, `duration_ms`, `user_id` (if any),
+  `ip`, `user_agent`.
+- Sensitive fields are redacted before logging:
+  `password`, `password_hash`, `Authorization`, `Cookie`, `nid`,
+  `nid_hash`.
+- Logs are shipped to whichever aggregator we run in the deployment
+  environment (Better Stack / Grafana Loki / a plain `journalctl`); the
+  application itself only emits to stdout.
+
+### 15.2 Metrics
+
+The API exposes Prometheus-format metrics on `/metrics` (gated behind a
+private port in production):
+
+- `http_requests_total{method,route,status}`
+- `http_request_duration_seconds{route}` (histogram)
+- `db_pool_acquire_seconds` (histogram)
+- `db_pool_idle`, `db_pool_acquired`
+- `cases_published_total` (counter)
+- `attachments_uploaded_total{kind}`
+- `audit_events_total{action}`
+
+A reference Grafana dashboard JSON ships in `ops/dashboards/` in Phase 9.
+
+### 15.3 Tracing
+
+Skipped for v1. We add OpenTelemetry only if a specific debugging session
+demands it.
+
+## 16. Performance budgets
+
+| Concern | Budget | Test |
+| -- | -- | -- |
+| Public list page LCP (3G, BD) | ≤ 2.5 s | Lighthouse / WebPageTest |
+| Public detail page LCP (3G, BD) | ≤ 2.5 s | same |
+| API p95 read latency | ≤ 200 ms | k6 baseline |
+| API p95 write latency | ≤ 500 ms | k6 baseline |
+| Frontend JS bundle (initial route) | ≤ 200 KB gzipped | `vite build` report |
+| CSS bundle | ≤ 30 KB gzipped | same |
+
+Any PR that breaches a budget must either fix it or include a written
+exception in the PR description.
+
+## 17. Open questions
 
 - **Comments / corrections** on cases — open them up, or keep the archive
   read-only for the public?
@@ -223,4 +488,7 @@ docker compose exec -T postgres \
   hash entirely and keep just last 4 digits?
 - **Cross-references** between cases (e.g. same accused, same location) —
   build a graph view in v2?
-- **Backups & disaster recovery** — concrete RPO/RTO targets are TBD.
+- **Asynchronous jobs** — when do we promote the in-process goroutine
+  pool (image transcoding, virus scan) to a real queue?
+- **Multi-region storage** — one R2 bucket for everything, or split by
+  jurisdiction so we can comply with regional takedowns selectively?

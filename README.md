@@ -51,6 +51,16 @@ frontend/   React + Vite + Tailwind SPA
 docs/       Architecture & design notes
 ```
 
+## Documentation
+
+The planning suite lives in [`docs/`](./docs/). Read in this order:
+
+1. [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) — vision, personas, user stories, functional + non-functional requirements.
+2. [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — system architecture, data model, sequence diagrams, deployment topology.
+3. [`docs/API_SPEC.md`](./docs/API_SPEC.md) — REST API contract for `v1`.
+4. [`docs/UI_DESIGN.md`](./docs/UI_DESIGN.md) — design language, component library, page-by-page specifications.
+5. [`docs/ROADMAP.md`](./docs/ROADMAP.md) — phased implementation plan with PR breakdown.
+
 ## Roles
 
 `super_admin` · `admin` · `moderator` · `contributor` · `viewer` (+ anonymous public).
