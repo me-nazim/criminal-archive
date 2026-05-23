@@ -1,0 +1,36 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Backend (Go)
+backend/bin/
+backend/tmp/
+backend/*.log
+backend/coverage.out
+backend/.air.toml.local
+
+# Frontend (Node)
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/coverage/
+frontend/*.log
+frontend/*.tsbuildinfo
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Docker
+docker-compose.override.yml
+
+# Local data
+data/
+uploads/
+tmp/

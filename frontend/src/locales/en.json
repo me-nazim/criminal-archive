@@ -1,0 +1,35 @@
+{
+  "site": {
+    "name": "Tansiq Information Portal",
+    "short": "Tansiq",
+    "tagline": "Verified, public documentation of crimes."
+  },
+  "nav": {
+    "home": "Home",
+    "cases": "Cases",
+    "persons": "Profiles",
+    "submit": "Submit",
+    "about": "About",
+    "login": "Login",
+    "register": "Register"
+  },
+  "footer": {
+    "rights": "All rights reserved.",
+    "language": "Language"
+  },
+  "home": {
+    "hero_title": "The truth of every incident, open to all.",
+    "hero_subtitle": "Verified profiles of victims and accused, primary evidence and case timelines — in an independent community archive.",
+    "browse_cases": "Browse cases",
+    "submit_info": "Submit information"
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong.",
+    "retry": "Try again"
+  },
+  "notfound": {
+    "title": "Page not found",
+    "back_home": "Back to home"
+  }
+}
